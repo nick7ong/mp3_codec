@@ -1,8 +1,15 @@
-# mp3_codec
-MUE610 Project 2:  Psychoacoustic Ear Model II utilized in MPEG-1 layer III (MP3) as described in ISO/IEC 11172-3
+# MUE610 Project 2:
+### Psychoacoustic Ear Model II utilized in MPEG-1 layer III (MP3) as described in ISO/IEC 11172-3
+
+## Project Structure
+```text
+mp3_codec/
+├── codec.py          # contains the required tasks and visualizations.
+├── utils.py          # contains utility and helper functions.
+├── audio/            # audio directory for test samples
+```
 
 ## Environment Setup
-
 Setup instructions using `Python v3.11`, `.venv` and `requirements.txt`.
 
 ### 1. Clone the Repository
