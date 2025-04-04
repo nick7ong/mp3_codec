@@ -176,3 +176,4 @@ cython_debug/
 /audio
 *.wav
 *.mp3
+.idea/
