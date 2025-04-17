@@ -4,8 +4,8 @@
 ## Project Structure
 ```text
 mp3_codec/
-├── codec.py          # contains the required tasks and visualizations.
-├── utils.py          # contains utility and helper functions.
+├── ear_model.py      # contains the layer 3 ear model and visualizations.
+├── utils.py          # contains psychoacoustic utility and helper functions.
 ├── audio/            # audio directory for test samples
 ```
 
