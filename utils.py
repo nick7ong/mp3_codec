@@ -28,8 +28,25 @@ def apply_fft(frames, window):
 
 def spl_normalize(magnitude):
     spl = 20 * np.log10(magnitude + 1e-12)
-    spl += 96 - np.max(spl)
+    peak = np.max(spl, axis=1, keepdims=True)
+    spl += 96.0 - peak
     return spl
+
+
+def fft_and_normalize(audio, frame_size, hop_size, window_type='hann'):
+    window = get_window(window_type, frame_size)
+    frames = frame_audio(audio, frame_size, hop_size)
+    magnitude = apply_fft(frames, window)
+    spl = spl_normalize(magnitude)
+
+    return spl
+
+
+def dbspl_to_dbfs(audio, frame_size, hop_size, window_type):
+    frames = frame_audio(audio, frame_size, hop_size)
+    window = get_window(window_type, frame_size)
+    rms = np.sqrt(np.mean((frames * window) ** 2, axis=1))
+    return 20 * np.log10(rms + 1e-12)
 
 
 def bark_scale(f):
@@ -53,30 +70,17 @@ def compute_bark_and_threshold(fs, frame_size):
     # Compute thresholds instead of pre-baked table
     thresholds = np.zeros_like(freqs)
     for k, f in enumerate(freqs):
-        if f < 20 or f > 20000:  # anything below 20hz
+        if f < 20:  # anything below 20hz
             thresholds[k] = 80.0
         else:
             thresholds[k] = threshold_in_quiet(f)
     return bark_map, thresholds
 
 
-def fft_and_normalize(audio, frame_size, hop_size, window_type='hann'):
-    window = get_window(window_type, frame_size)
-    frames = frame_audio(audio, frame_size, hop_size)
-    magnitude = apply_fft(frames, window)
-    spl = spl_normalize(magnitude)
-
-    return spl
-
-
-def dbspl_to_dbfs(audio, frame_size, hop_size, window_type):
-    frames = frame_audio(audio, frame_size, hop_size)
-    window = get_window(window_type, frame_size)
-    windowed = frames * window
-
-    rms_vals = np.sqrt(np.mean(windowed ** 2, axis=1))
-    dbfs = 20 * np.log10(rms_vals + 1e-12)  # avoid log(0)
-    return dbfs
+def get_bark_boundaries(bark_map, freqs):
+    bark_int = np.floor(bark_map).astype(int)
+    idx = np.where(np.diff(bark_int))[0]  # indices before change
+    return freqs[idx]  # Hz values
 
 
 UNSET = 0
@@ -91,34 +95,30 @@ def add_db(db_values):
 
 
 def identify_maskers(spl, threshold_in_quiet):
-    n_bins = len(spl)
-    flags = np.zeros(n_bins, dtype=np.uint8)
-    tonal_maskers = []
+    n = len(spl)
+    flags = np.zeros(n, dtype=np.uint8)
+    tonal = []
 
-    for k in range(2, n_bins - 2):
+    for k in range(2, n - 2):
         if spl[k] >= spl[k + 1] and spl[k] > spl[k - 1]:
-            if k < 63:
-                neighbors = [-2, -1, 1, 2]
-            elif k < 127:
-                neighbors = [-3, -2, -1, 1, 2, 3]
-            else:
-                neighbors = [-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6]
+            rng = (-2, -1, 1, 2) if k < 63 else (-3, -2, -1, 1, 2, 3) if k < 127 else \
+                (-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6)
 
-            is_tonal = all(spl[k] - spl[k + j] >= 7 for j in neighbors if 0 <= k + j < n_bins)
+            if all(0 <= k + j < n and spl[k] - spl[k + j] >= 5  # ← 7 dB ⇒ 5 dB
+                   for j in rng):
 
-            if is_tonal and spl[k] > threshold_in_quiet[k]:
-                tonal_maskers.append(k)
-                flags[k] = TONE
+                if spl[k] - threshold_in_quiet[k] > -10:  # allow 10 dB below Tq
+                    tonal.append(k)
+                    flags[k] = TONE
+                    for j in rng:
+                        nb = k + j
+                        if 0 <= nb < n and flags[nb] == UNSET:
+                            flags[nb] = IGNORE
 
-                for j in neighbors:
-                    neighbor = k + j
-                    if 0 <= neighbor < n_bins and neighbor != k:
-                        flags[neighbor] = IGNORE
-
-    noise_maskers = [k for k in range(n_bins) if flags[k] == UNSET]
-    flags[noise_maskers] = NOISE
-
-    return flags, tonal_maskers, noise_maskers
+    noise = [k for k in range(n) if flags[k] == UNSET]
+    for k in noise:
+        flags[k] = NOISE
+    return flags, tonal, noise
 
 
 def decimate_maskers(spl, flags, tonal_maskers, noise_maskers, bark_map, threshold_in_quiet):
@@ -253,3 +253,26 @@ def compute_subband_smr(spl, global_mask, subband_boundaries):
         smr[sb] = signal_level - mask_level
 
     return smr
+
+
+def choose_informative_frame(spl, threshold_in_quiet, min_tonal=5, min_noise=5, rms_floor_db=-96):
+    def spl_to_lin(spl_db):
+        return 10 ** (spl_db / 20.0)
+
+    rms_db = 20 * np.log10(np.sqrt(np.mean(spl_to_lin(spl), axis=1)) + 1e-12)
+
+    best_idx, best_score = 0, -1
+    for i, frame_spl in enumerate(spl):
+        if rms_db[i] < rms_floor_db:
+            continue
+
+        _, tonal, noise = identify_maskers(frame_spl, threshold_in_quiet)
+
+        if len(tonal) >= min_tonal and len(noise) >= min_noise:
+            return i
+
+        score = len(tonal) + len(noise)
+        if score > best_score:
+            best_idx, best_score = i, score
+
+    return best_idx

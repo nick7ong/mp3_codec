@@ -1,15 +1,7 @@
 import argparse
-import random
-
 import matplotlib.pyplot as plt
 
 from utils import *
-
-
-def choose_random_frame(spl, energy_threshold=-70):
-    frame_energies = np.mean(spl, axis=1)
-    candidates = np.where(frame_energies > energy_threshold)[0]
-    return random.choice(candidates) if len(candidates) > 0 else 0
 
 
 def ear_model(audio_file, visualize=True, verbose=False):
@@ -35,7 +27,8 @@ def ear_model(audio_file, visualize=True, verbose=False):
     smr_accum = []
 
     verbose and print("Selecting a frame with enough energy..")
-    frame_idx = choose_random_frame(spl)
+    frame_idx = choose_informative_frame(spl, threshold_in_quiet)
+    verbose and print(f"Picked frame {frame_idx} for plotting...")
 
     for i in range(spl.shape[0]):
         if dbfs[i] <= -96:
@@ -66,7 +59,6 @@ def ear_model(audio_file, visualize=True, verbose=False):
 
         if i == frame_idx:
             captured_frame_spl = frame_spl.copy()
-            captured_flags = flags.copy()
             captured_tonal_maskers = tonal_maskers[:]
             captured_noise_maskers = noise_maskers[:]
             captured_tonal_masking = tonal_masking
@@ -74,20 +66,26 @@ def ear_model(audio_file, visualize=True, verbose=False):
 
     if visualize:
         freqs = np.fft.rfftfreq(frame_size, d=1 / fs)
+        bark_lines = get_bark_boundaries(bark_map, freqs)
 
         # Tonal/Noise Masker Identification for One Frame
         plt.figure()
-        plt.plot(freqs, captured_frame_spl, label="SPL")
+        plt.plot(freqs, captured_frame_spl, label="SPL", linewidth=1)
+        plt.plot(freqs, threshold_in_quiet, label="Threshold in Quiet", linestyle=':', linewidth=1)
         plt.scatter(freqs[captured_tonal_maskers], captured_frame_spl[captured_tonal_maskers], color='red',
-                    label="Tonal")
+                    label="Tonal", marker='o')
         plt.scatter(freqs[captured_noise_maskers], captured_frame_spl[captured_noise_maskers], color='green',
-                    label="Noise")
+                    label="Noise", marker='x')
+
+        for f in bark_lines:
+            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0)
+
         plt.xscale("log")
         plt.title(f"Masker Identification - Frame {frame_idx}")
         plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Level (dB)")
-        plt.legend()
-        plt.grid(True, which="both", ls=":")
+        plt.ylabel("Level (dB-SPL)")
+        plt.ylim(-10, 100)
+        plt.legend(loc='upper right')
         plt.tight_layout()
         plt.show()
 
@@ -96,37 +94,30 @@ def ear_model(audio_file, visualize=True, verbose=False):
         noise_vals = np.array([add_db(m) if m else np.nan for m in captured_noise_masking])
 
         plt.figure()
-        plt.plot(freqs, captured_frame_spl, label="SPL")
-        plt.plot(freqs, tonal_vals, label="Tonal Threshold", linestyle='--')
-        plt.plot(freqs, noise_vals, label="Noise Threshold", linestyle=':')
+        plt.plot(freqs, captured_frame_spl, label="SPL", linewidth=1)
+        plt.plot(freqs, threshold_in_quiet, label="Threshold in Quiet", linestyle=':', linewidth=1)
+        plt.plot(freqs, tonal_vals, label="Tonal Threshold", linestyle='--', color='red', linewidth=1)
+        plt.plot(freqs, noise_vals, label="Noise Threshold", linestyle='--', color='green', linewidth=1)
+        plt.scatter(freqs[captured_tonal_maskers], captured_frame_spl[captured_tonal_maskers], color='red',
+                    label="Tonal", marker='o')
+        plt.scatter(freqs[captured_noise_maskers], captured_frame_spl[captured_noise_maskers], color='green',
+                    label="Noise", marker='x')
+
+        for f in bark_lines:
+            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0)
+
         plt.xscale("log")
         plt.title(f"Individual Masking Thresholds - Frame {frame_idx}")
         plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Level (dB)")
-        plt.legend()
-        plt.grid(True, which="both", ls=":")
-        plt.tight_layout()
-        plt.show()
-
-        # Average SPL, Global Mask, Threshold in Quiet
-        avg_spl = np.mean(spl, axis=0)
-        avg_mask = np.mean(global_masks, axis=0)
-        avg_smr = np.mean(smr_accum, axis=0)
-
-        plt.figure(figsize=(10, 6))
-        plt.plot(freqs, avg_spl, label="Average SPL")
-        plt.plot(freqs, avg_mask, label="Average Global Mask", linestyle='--')
-        plt.plot(freqs, threshold_in_quiet, label="Threshold in Quiet", linestyle=':')
-        plt.xscale("log")
-        plt.title("Average Frequency Content Over Time")
-        plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Level (dB)")
-        plt.legend()
-        plt.grid(True, which="both", ls=":")
+        plt.ylabel("Level (dB-SPL)")
+        plt.ylim(-10, 100)
+        plt.legend(loc='upper right')
         plt.tight_layout()
         plt.show()
 
         # SMR per Subband
+        avg_smr = np.mean(smr_accum, axis=0)
+
         plt.figure()
         plt.stem(avg_smr)
         plt.title("Average SMR per Subband")
