@@ -102,12 +102,12 @@ def identify_maskers(spl, threshold_in_quiet):
     for k in range(2, n - 2):
         if spl[k] >= spl[k + 1] and spl[k] > spl[k - 1]:
             rng = (-2, -1, 1, 2) if k < 63 else (-3, -2, -1, 1, 2, 3) if k < 127 else \
-                (-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6)
+                (-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6)  # relative indexes
 
-            if all(0 <= k + j < n and spl[k] - spl[k + j] >= 5  # ← 7 dB ⇒ 5 dB
+            if all(0 <= k + j < n and spl[k] - spl[k + j] >= 5  # 7dB --> 5dB
                    for j in rng):
 
-                if spl[k] - threshold_in_quiet[k] > -10:  # allow 10 dB below Tq
+                if spl[k] - threshold_in_quiet[k] > -10:  # allow 10dB below Tq
                     tonal.append(k)
                     flags[k] = TONE
                     for j in rng:

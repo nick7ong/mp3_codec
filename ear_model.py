@@ -26,7 +26,7 @@ def ear_model(audio_file, visualize=True, verbose=False):
     global_masks = []
     smr_accum = []
 
-    verbose and print("Selecting a frame with enough energy..")
+    verbose and print("Selecting a frame with enough energy...")
     frame_idx = choose_informative_frame(spl, threshold_in_quiet)
     verbose and print(f"Picked frame {frame_idx} for plotting...")
 
@@ -38,6 +38,10 @@ def ear_model(audio_file, visualize=True, verbose=False):
 
         verbose and i == frame_idx and print("Identifying maskers...")
         flags, tonal_maskers, noise_maskers = identify_maskers(frame_spl.copy(), threshold_in_quiet)
+
+        if i == frame_idx:
+            raw_tonal_maskers = tonal_maskers[:]
+            raw_noise_maskers = noise_maskers[:]
 
         verbose and i == frame_idx and print("Decimating maskers...")
         flags, tonal_maskers, noise_maskers = decimate_maskers(
@@ -68,28 +72,48 @@ def ear_model(audio_file, visualize=True, verbose=False):
         freqs = np.fft.rfftfreq(frame_size, d=1 / fs)
         bark_lines = get_bark_boundaries(bark_map, freqs)
 
-        # Tonal/Noise Masker Identification for One Frame
+        # Plot BEFORE decimation
+        plt.figure()
+        plt.plot(freqs, captured_frame_spl, label="SPL", linewidth=1)
+        plt.plot(freqs, threshold_in_quiet, label="Threshold in Quiet", linestyle=':', linewidth=1)
+        plt.scatter(freqs[raw_tonal_maskers], captured_frame_spl[raw_tonal_maskers], color='red',
+                    label="Raw Tonal Maskers", marker='o')
+        plt.scatter(freqs[raw_noise_maskers], captured_frame_spl[raw_noise_maskers], color='green',
+                    label="Raw Noise Maskers", marker='x')
+
+        for i, f in enumerate(bark_lines):
+            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0, label='Bark Bands' if i == 0 else None)
+
+        plt.xscale("log")
+        plt.title(f"Maskers Before Decimation - Frame {frame_idx}")
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Level (dB-SPL)")
+        plt.ylim(-10, 100)
+        plt.legend(loc='lower left')
+        plt.tight_layout()
+        plt.show()
+
+        # Plot AFTER decimation
         plt.figure()
         plt.plot(freqs, captured_frame_spl, label="SPL", linewidth=1)
         plt.plot(freqs, threshold_in_quiet, label="Threshold in Quiet", linestyle=':', linewidth=1)
         plt.scatter(freqs[captured_tonal_maskers], captured_frame_spl[captured_tonal_maskers], color='red',
-                    label="Tonal", marker='o')
+                    label="Final Tonal Maskers", marker='o')
         plt.scatter(freqs[captured_noise_maskers], captured_frame_spl[captured_noise_maskers], color='green',
-                    label="Noise", marker='x')
+                    label="Final Noise Maskers", marker='x')
 
-        for f in bark_lines:
-            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0)
+        for i, f in enumerate(bark_lines):
+            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0, label='Bark Bands' if i == 0 else None)
 
         plt.xscale("log")
-        plt.title(f"Masker Identification - Frame {frame_idx}")
+        plt.title(f"Maskers After Decimation - Frame {frame_idx}")
         plt.xlabel("Frequency (Hz)")
         plt.ylabel("Level (dB-SPL)")
         plt.ylim(-10, 100)
-        plt.legend(loc='upper right')
+        plt.legend(loc='lower left')
         plt.tight_layout()
         plt.show()
 
-        # Individual Masking Thresholds
         tonal_vals = np.array([add_db(m) if m else np.nan for m in captured_tonal_masking])
         noise_vals = np.array([add_db(m) if m else np.nan for m in captured_noise_masking])
 
@@ -103,15 +127,15 @@ def ear_model(audio_file, visualize=True, verbose=False):
         plt.scatter(freqs[captured_noise_maskers], captured_frame_spl[captured_noise_maskers], color='green',
                     label="Noise", marker='x')
 
-        for f in bark_lines:
-            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0)
+        for i, f in enumerate(bark_lines):
+            plt.axvline(f, color='grey', linewidth=0.8, alpha=.4, zorder=0, label='Bark Bands' if i == 0 else None)
 
         plt.xscale("log")
         plt.title(f"Individual Masking Thresholds - Frame {frame_idx}")
         plt.xlabel("Frequency (Hz)")
         plt.ylabel("Level (dB-SPL)")
         plt.ylim(-10, 100)
-        plt.legend(loc='upper right')
+        plt.legend(loc='lower left')
         plt.tight_layout()
         plt.show()
 
