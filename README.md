@@ -5,8 +5,18 @@
 ```text
 mp3_codec/
 ├── ear_model.py      # contains the layer 3 ear model and visualizations.
+├── quantizer.py      # uses the ear_model to simulate audio compression.
 ├── utils.py          # contains psychoacoustic utility and helper functions.
 ├── audio/            # audio directory for test samples
+```
+
+### How To Run
+```bash
+# For psychoacoustic model simulation
+python ear_model.py audio/<input>.wav --verbose
+
+# For simulated perceptual audio compression/quantization
+python quantizer.py audio/<input>.wav --output audio/<output>.wav --smr 0.0 --visualize
 ```
 
 ## Environment Setup

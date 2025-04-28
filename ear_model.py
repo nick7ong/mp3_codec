@@ -1,4 +1,5 @@
 import argparse
+
 import matplotlib.pyplot as plt
 
 from utils import *
@@ -10,7 +11,7 @@ def ear_model(audio_file, visualize=True, verbose=False):
     window_type = 'hann'
 
     verbose and print("Loading audio...")
-    audio, fs = load_audio(audio_file)
+    audio, fs = load_audio(audio_file, mono=True)
 
     verbose and print("FFT and SPL normalization...")
     spl = fft_and_normalize(audio, frame_size, hop_size, window_type)

@@ -1,12 +1,12 @@
 import numpy as np
 import soundfile as sf
-from scipy.signal import get_window
+from scipy.signal import get_window, butter, lfilter
 
 
-def load_audio(filename):
+def load_audio(filename, mono=False):
     audio, fs = sf.read(filename)
-    if audio.ndim > 1:
-        audio = np.mean(audio, axis=1)  # modeling mono for now
+    if mono and audio.ndim > 1:
+        audio = np.mean(audio, axis=1)
     return audio, fs
 
 
@@ -276,3 +276,27 @@ def choose_informative_frame(spl, threshold_in_quiet, min_tonal=5, min_noise=5, 
             best_idx, best_score = i, score
 
     return best_idx
+
+
+def overlap_add(frames, hop_size):
+    frame_size = frames[0].shape[0]
+    n_frames = len(frames)
+    length = (n_frames - 1) * hop_size + frame_size
+    output = np.zeros(length)
+
+    for i, frame in enumerate(frames):
+        start = i * hop_size
+        output[start:start + frame_size] += frame
+
+    return output
+
+
+def apply_lowpass(audio, fs, cutoff_hz, order=10):
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff_hz / nyquist
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    if audio.ndim == 1:
+        filtered_audio = lfilter(b, a, audio)
+    else:
+        filtered_audio = np.stack([lfilter(b, a, audio[:, ch]) for ch in range(audio.shape[1])], axis=-1)
+    return filtered_audio
