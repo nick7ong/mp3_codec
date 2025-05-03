@@ -1,5 +1,6 @@
 # MUE610 Project 2:
 ### Psychoacoustic Ear Model II utilized in MPEG-1 layer III (MP3) as described in ISO/IEC 11172-3
+Project report and sound examples [here](https://nicktong.notion.site/MP3-Ear-Model-1e87cac3a9d780d280a2ea144c3bf92e).
 
 ## Project Structure
 ```text
